@@ -68,6 +68,10 @@ LoopClosureAssistant::LoopClosureAssistant(
 
   marker_publisher_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(
     "slam_toolbox/graph_visualization", rclcpp::QoS(1));
+
+  pose_graph_publisher_ = node_->create_publisher<nav_msgs::msg::Path>(
+    "slam_toolbox/pose_graph", rclcpp::QoS(1));
+
   map_frame_ = node->get_parameter("map_frame").as_string();
 }
 
@@ -259,9 +263,32 @@ void LoopClosureAssistant::publishGraph()
   marray.markers.push_back(edges_marker);
   marray.markers.push_back(localization_edges_marker);
 
+  // publish pose graph
+  nav_msgs::msg::Path pose_graph;
+  karto::LocalizationScanVertices lsv = localization_vertices;
+
+  while (!lsv.empty()) {
+    auto &vertex = lsv.front();
+    lsv.pop();
+    auto scan = vertex.scan;
+
+    karto::Pose2 pose = scan->GetCorrectedPose();
+    kt_double time = scan->GetTime();
+
+    geometry_msgs::msg::PoseStamped msg;
+    msg.header.stamp = rclcpp::Time(static_cast<uint64_t>(time * 1e9));
+    msg.pose.position.x = pose.GetX();
+    msg.pose.position.y = pose.GetY();
+    msg.pose.position.z = pose.GetHeading();
+
+    pose_graph.poses.push_back(msg);
+  }
+
   // if disabled, clears out old markers
   interactive_server_->applyChanges();
   marker_publisher_->publish(marray);
+
+  pose_graph_publisher_->publish(pose_graph);
 }
 
 /*****************************************************************************/
