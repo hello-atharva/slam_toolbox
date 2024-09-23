@@ -186,6 +186,9 @@ void LoopClosureAssistant::publishGraph()
 
   visualization_msgs::msg::Marker m = vis_utils::toMarker(map_frame_, "slam_toolbox", 0.1, node_);
 
+  // publish pose graph
+  nav_msgs::msg::Path pose_graph;
+
   // add map nodes
   for (const auto & sensor_name : vertices) {
     for (const auto & vertex : sensor_name.second) {
@@ -205,6 +208,17 @@ void LoopClosureAssistant::publishGraph()
       } else {
         marray.markers.push_back(m);
       }
+
+      // karto::Pose2 pose = scan->GetCorrectedPose();
+      kt_double time = vertex.second->GetObject()->GetTime();
+
+      geometry_msgs::msg::PoseStamped msg;
+      msg.header.stamp = rclcpp::Time(static_cast<uint64_t>(time * 1e9));
+      msg.pose.position.x = pose.GetX();
+      msg.pose.position.y = pose.GetY();
+      msg.pose.position.z = pose.GetHeading();
+
+      pose_graph.poses.push_back(msg);
     }
   }
 
@@ -254,35 +268,24 @@ void LoopClosureAssistant::publishGraph()
     if (source_id >= first_localization_id || target_id >= first_localization_id) {
       localization_edges_marker.points.push_back(p0);
       localization_edges_marker.points.push_back(p1);
+      // RCLCPP_INFO(node_->get_logger(), "Adding a localization edge pair.");
     } else {
       edges_marker.points.push_back(p0);
       edges_marker.points.push_back(p1);
+      // RCLCPP_INFO(node_->get_logger(), "Adding a normal edge pair.");
     }
   }
 
   marray.markers.push_back(edges_marker);
   marray.markers.push_back(localization_edges_marker);
 
-  // publish pose graph
-  nav_msgs::msg::Path pose_graph;
-  karto::LocalizationScanVertices lsv = localization_vertices;
+  // RCLCPP_INFO(node_->get_logger(), "NUMBER OF VERTICES: %i", localization_vertices.size());
 
-  while (!lsv.empty()) {
-    auto &vertex = lsv.front();
-    lsv.pop();
-    auto scan = vertex.scan;
-
-    karto::Pose2 pose = scan->GetCorrectedPose();
-    kt_double time = scan->GetTime();
-
-    geometry_msgs::msg::PoseStamped msg;
-    msg.header.stamp = rclcpp::Time(static_cast<uint64_t>(time * 1e9));
-    msg.pose.position.x = pose.GetX();
-    msg.pose.position.y = pose.GetY();
-    msg.pose.position.z = pose.GetHeading();
-
-    pose_graph.poses.push_back(msg);
-  }
+  // while (!lsv.empty()) {
+  //   auto &vertex = lsv.front();
+  //   lsv.pop();
+  //   auto scan = vertex.scan;
+  // }
 
   // if disabled, clears out old markers
   interactive_server_->applyChanges();
